@@ -1,7 +1,7 @@
 #!/usr/bin/ucode
 "use strict";
 
-import { access } from "fs";
+import { access, popen } from "fs";
 import { load_config } from "./common/config.mjs";
 import { bridge_outbounds, bridge_rules, bridges } from "./feature/bridge.mjs";
 import { blocked_domain_rules, dns_conf, dns_rules, dns_server_inbounds, dns_server_outbounds, fast_domain_rules, secure_domain_rules } from "./feature/dns.mjs";
@@ -241,6 +241,63 @@ function balancers(proxy, extra_inbound, fakedns) {
     ];
 };
 
+
+function shell_quote(s) {
+    return "'" + replace(s, "'", "'\''") + "'";
+}
+
+function command_output(cmd) {
+    const h = popen(cmd, "r");
+    if (!h) {
+        return null;
+    }
+    let out = h.read("all");
+    h.close();
+    return out;
+}
+
+function parse_raw_profile_bundle(bundle_string, profile_name) {
+    if (!bundle_string || trim(bundle_string) == "") {
+        return null;
+    }
+    let data = null;
+    try {
+        data = json(bundle_string);
+    } catch (e) {
+        return null;
+    }
+    if (type(data) == "array") {
+        if (profile_name) {
+            for (let p in data) {
+                if ((p["remarks"] || "") == profile_name) {
+                    return p;
+                }
+            }
+        }
+        return data[0];
+    }
+    if (type(data) == "object") {
+        return data;
+    }
+    return null;
+}
+
+function imported_raw_profile(general) {
+    if (general["raw_profile_enable"] != "1") {
+        return null;
+    }
+    const profile_name = general["raw_profile_name"] || "";
+    const profile_url = general["raw_profile_url"] || "";
+    if (profile_url != "") {
+        const fetched = command_output("uclient-fetch -qO- -- " + shell_quote(profile_url));
+        const parsed = parse_raw_profile_bundle(fetched, profile_name);
+        if (parsed) {
+            return parsed;
+        }
+    }
+    return parse_raw_profile_bundle(general["raw_profile_bundle"] || "", profile_name);
+}
+
 function observatory(proxy, manual_tproxy) {
     if (proxy["observatory"] == "1") {
         return {
@@ -261,6 +318,10 @@ function gen_config() {
 
     const general = filter(values(config), k => k[".type"] == "general")[0] || {};
     const custom_configuration_hook = loadstring(general["custom_configuration_hook"] || "return i => i;")();
+    const raw_profile = imported_raw_profile(general);
+    if (raw_profile) {
+        return custom_configuration_hook(raw_profile);
+    }
     return custom_configuration_hook({
         inbounds: inbounds(general, config, extra_inbound),
         outbounds: outbounds(general, config, manual_tproxy, bridge, extra_inbound, fakedns),

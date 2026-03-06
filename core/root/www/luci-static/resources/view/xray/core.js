@@ -734,6 +734,22 @@ return view.extend({
         o.rmempty = false;
 
         s.tab('custom_options', _('Custom Options'));
+
+        o = s.taboption('custom_options', form.Flag, 'raw_profile_enable', _('Enable Raw Profile Import'), _('Load a full Xray JSON profile from URL or pasted JSON instead of generating config from UCI sections.'));
+        o.default = o.disabled;
+
+        o = s.taboption('custom_options', form.Value, 'raw_profile_url', _('Imported Profile URL'), _('If set, luci-app-xray will try to fetch JSON from this URL using uclient-fetch during config generation. If fetching fails, the JSON bundle field below will be used as fallback.'));
+        o.placeholder = 'https://tv123.ru/sub/...';
+        o.depends('raw_profile_enable', '1');
+
+        o = s.taboption('custom_options', form.Value, 'raw_profile_name', _('Active Imported Profile'), _('Profile remark/name to activate from imported JSON array. If empty or not found, the first profile in array will be used.'));
+        o.placeholder = '🇳🇱 CCCP - Netherlands';
+        o.depends('raw_profile_enable', '1');
+
+        o = s.taboption('custom_options', form.TextValue, 'raw_profile_bundle', _('Imported Profile Bundle (JSON)'), _('Paste a full Xray JSON object or an array of Xray profiles here. Used directly when raw import is enabled, or as fallback when the URL does not return valid JSON.'));
+        o.monospace = true;
+        o.rows = 18;
+        o.depends('raw_profile_enable', '1');
         let custom_configuration_hook = s.taboption('custom_options', form.TextValue, 'custom_configuration_hook', _('Custom Configuration Hook'), _('Read <a href="https://ucode.mein.io/">ucode Documentation</a> for the language used. Code filled here may need to change after upgrading luci-app-xray.'));
         custom_configuration_hook.placeholder = "return function(config) {\n    return config;\n};";
         custom_configuration_hook.monospace = true;
